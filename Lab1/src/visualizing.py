@@ -6,16 +6,13 @@ import numpy as np
 import torch
 
 def main():
-
-    userInt = int(input("Enter an integer between 0 and 60000: "))
+    userInt = int(input("Enter an integer between 0 and 59000: "))
     print("You entered: ", userInt)
     
     train_transform = transforms.Compose([transforms.ToTensor()]) 
     
     train_set = MNIST('./data/mnist', train=True, download=True, 
     transform=train_transform)
-
-
 
     img = train_set.data[userInt]
     image_size = 28 * 28
@@ -27,8 +24,8 @@ def main():
     model.eval()
 
     img_normalized = img.type(torch.float32) / 255.0
-    noise_ratio = 0.5
 
+    noise_ratio = 0.5
     noise = (torch.rand(28, 28)-0.5)*2 * noise_ratio
     noise_img = noise + img_normalized
     noise_img = torch.clamp(noise_img, 0., 1.)    
@@ -67,7 +64,7 @@ def intermolationMod():
     bottle2 = model.encode(img2.flatten())
 
     f = plt.figure()
-    f.add_subplot(1,10,1)
+    f.add_subplot(1,10,1)       
     plt.imshow(img1, cmap='gray')
     plt.axis('off')
 
@@ -86,6 +83,6 @@ def intermolationMod():
 
 
 if __name__ == '__main__':
-    #main()
-    intermolationMod()
+    main()
+    #intermolationMod()
 
