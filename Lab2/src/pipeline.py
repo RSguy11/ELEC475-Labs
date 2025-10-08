@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+
 def main():
     print("Lab 2 pipeline")
     train_transform = transforms.Compose([transforms.ToTensor()]) 
@@ -14,9 +15,6 @@ def main():
 
     img_np = img.permute(1, 2, 0).numpy()  # Change from CHW to HWC format
 
-    f = plt.figure()
-    f.add_subplot(1,1,1)
-    plt.imshow(img_np)
 
 
 
