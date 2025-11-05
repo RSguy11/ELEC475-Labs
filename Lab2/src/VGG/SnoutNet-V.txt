@@ -1,0 +1,34 @@
+# SnoutNet-V (VGG16) Model Commands
+# ELEC 475 Lab 2 - Pet Nose Localization
+# 
+# Usage: Run these commands from the VGG directory
+# Description: Train and test the VGG16-based SnoutNet architecture with pretrained backbone
+#
+# Available options for train.py:
+#   -a, --augment {true,false}    Enable data augmentation (true/false). Default: false
+#   --epochs EPOCHS               Number of training epochs. Default: 50
+#   --batch-size BATCH_SIZE       Batch size for training. Default: 16
+#   --lr LR                       Learning rate. Default: 0.0001
+#
+# Available options for test.py:
+#   -t, --type {baseline,augmented,auto}  Model type to test (default: auto-detect)
+#
+# Commands:
+
+########## Added Notes for Training ##########
+the oxford-iiit-pet-noses dataset downloaded in 
+step 2.2 of the lab details must be places in the src
+directory for the models run. 
+*** IF THE DATASET IS NOT THEIR THE MODELS WILL NOT TRAIN ****
+
+# Train without augmentations (baseline model)
+python train.py -a false
+
+# Train with augmentations  
+python train.py -a true
+
+# Test the model (auto-detects best available model)
+python test.py -t auto
+
+# Visualize results (same as test - includes comprehensive visualization)
+python test.py -t auto

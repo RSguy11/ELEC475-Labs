@@ -1,0 +1,26 @@
+# ELEC 475 Lab 2 - Trained Model Weights
+# Student: 20273059
+# Date: October 28, 2025
+
+# Upload your trained models (.pth files) to OneDrive, Google Drive, or similar
+# and replace the placeholder below with your actual sharing link:
+
+WEIGHTS_DOWNLOAD_LINK: https://1drv.ms/f/c/6e167015940772ee/EuodaFaqWWpHiypMQPX7sOEBbzzhU5UtwyNtUx1zRa9yiA?e=9v7Qcp
+
+# Instructions for TA:
+# 1. Download all .pth files from the link above
+# 2. Place them in their respective directories maintaining the folder structure,
+     Each path must be placed in their respective model names than can be run using the test or
+     visual function
+# 3. Navigate to each model directory and run commands from the respective .txt files:
+#    - SnoutNet/SnoutNet.txt
+#    - AlexNet/SnoutNet-A.txt  
+#    - VGG/SnoutNet-V.txt
+#    - Ensemble/SnoutNet-Ensemble.txt
+
+########## Added Notes for Training ##########
+the oxford-iiit-pet-noses dataset downloaded in 
+step 2.2 of the lab details must be places in the source
+directory for the models run. 
+
+*** IF THE DATASET IS NOT THEIR THE MODELS WILL NOT TRAIN ****

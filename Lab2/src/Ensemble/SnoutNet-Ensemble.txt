@@ -1,0 +1,25 @@
+# SnoutNet-Ensemble Model Commands
+# ELEC 475 Lab 2 - Pet Nose Localization
+# 
+# Usage: Run these commands from the Ensemble directory
+# Description: Test the ensemble model that combines SnoutNet, AlexNet, and VGG16 predictions
+#             Note: Ensemble uses pretrained models from other directories, so no training required
+#
+# Available options for test.py:
+#   -t, --test_type {baseline,augmented,auto}  Type of model to test
+#   --method {weighted}                        Ensemble combination method (only weighted available)
+#   --batch_size BATCH_SIZE                    Batch size for testing
+#
+# Commands:
+
+########## Added Notes for Training ##########
+the oxford-iiit-pet-noses dataset downloaded in 
+step 2.2 of the lab details must be places in the src
+directory for the models run. 
+*** IF THE DATASET IS NOT THEIR THE MODELS WILL NOT TRAIN ****
+
+# Test the ensemble model (auto-detects best available configuration)
+python test.py --method weighted -t auto
+
+# Visualize ensemble results (same as test - includes comprehensive visualization)
+python test.py --method weighted -t auto

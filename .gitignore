@@ -1,0 +1,29 @@
+# Dataset files - too large for Git
+oxford-iiit-pet-noses/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Model weights - too large for Git
+*.pth
+
+# Virtual environment
+venv/
+env/
+
+# IDE files
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Log files
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

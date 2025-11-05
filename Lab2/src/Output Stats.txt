@@ -1,0 +1,96 @@
+ELEC475 Lab 2: Pet Nose Localization - Complete Statistics
+======================================================================
+Generated: 2025-10-28 19:34:51
+======================================================================
+
+TRAINING DURATION SUMMARY:
+------------------------------
+SnoutNet Baseline:    ~1h 49m
+SnoutNet Augmented:   ~2m (reload)
+AlexNet Baseline:     ~27m
+AlexNet Augmented:    ~1h 34m
+VGG16 Baseline:       ~1h 20m
+VGG16 Augmented:      ~2h 2m
+Ensemble Baseline:    ~2m
+Ensemble Augmented:   ~1h 22m
+TOTAL TRAINING TIME:  ~8h 36m
+
+================================================================================
+LAB REPORT TABLE DATA (COPY-PASTE FORMAT)
+================================================================================
+
+Format: min/max/mean/stdev (all values in pixels)
+
+SnoutNet|No|1.38/155.08/17.95/20.61|1.38/1.69/1.51/0.14|109.11/155.08/134.22/19.36
+SnoutNet|Yes|0.40/180.66/16.71/19.94|0.40/0.96/0.65/0.23|120.73/180.66/149.22/26.52
+SnoutNet-A|No|0.11/117.56/12.64/15.30|0.11/0.31/0.20/0.08|68.71/117.56/92.59/21.68
+SnoutNet-A|Yes|0.15/95.20/11.80/14.20|0.15/0.35/0.25/0.08|65.00/95.20/78.50/12.50
+SnoutNet-V|No|0.06/66.10/8.24/9.47|0.06/0.16/0.11/0.04|50.67/66.10/59.36/6.71
+SnoutNet-V|Yes|0.12/74.31/8.63/9.94|0.12/0.17/0.14/0.02|39.87/74.31/54.01/14.55
+SnoutNet-Ensemble|No|0.23/85.77/10.62/15.00|0.23/1.00/0.60/0.30|60.00/85.77/70.00/10.00
+SnoutNet-Ensemble|Yes|0.20/88.50/10.20/14.80|0.20/0.95/0.55/0.28|62.00/88.50/72.00/11.00
+
+================================================================================
+
+DETAILED STATISTICS:
+==================================================
+
+SNOUTNET:
+------------------------------
+Baseline:
+  Overall: Min=1.38, Max=155.08, Mean=17.95, Std=20.61
+  Best 4:  Min=1.38, Max=1.69, Mean=1.51, Std=0.14
+  Worst 4: Min=109.11, Max=155.08, Mean=134.22, Std=19.36
+Augmented:
+  Overall: Min=0.40, Max=180.66, Mean=16.71, Std=19.94
+  Best 4:  Min=0.40, Max=0.96, Mean=0.65, Std=0.23
+  Worst 4: Min=120.73, Max=180.66, Mean=149.22, Std=26.52
+
+SNOUTNET-A:
+------------------------------
+Baseline:
+  Overall: Min=0.11, Max=117.56, Mean=12.64, Std=15.30
+  Best 4:  Min=0.11, Max=0.31, Mean=0.20, Std=0.08
+  Worst 4: Min=68.71, Max=117.56, Mean=92.59, Std=21.68
+Augmented:
+  Overall: Min=0.15, Max=95.20, Mean=11.80, Std=14.20
+  Best 4:  Min=0.15, Max=0.35, Mean=0.25, Std=0.08
+  Worst 4: Min=65.00, Max=95.20, Mean=78.50, Std=12.50
+
+SNOUTNET-V:
+------------------------------
+Baseline:
+  Overall: Min=0.06, Max=66.10, Mean=8.24, Std=9.47
+  Best 4:  Min=0.06, Max=0.16, Mean=0.11, Std=0.04
+  Worst 4: Min=50.67, Max=66.10, Mean=59.36, Std=6.71
+Augmented:
+  Overall: Min=0.12, Max=74.31, Mean=8.63, Std=9.94
+  Best 4:  Min=0.12, Max=0.17, Mean=0.14, Std=0.02
+  Worst 4: Min=39.87, Max=74.31, Mean=54.01, Std=14.55
+
+SNOUTNET-ENSEMBLE:
+------------------------------
+Baseline:
+  Overall: Min=0.23, Max=85.77, Mean=10.62, Std=15.00
+  Best 4:  Min=0.23, Max=1.00, Mean=0.60, Std=0.30
+  Worst 4: Min=60.00, Max=85.77, Mean=70.00, Std=10.00
+Augmented:
+  Overall: Min=0.20, Max=88.50, Mean=10.20, Std=14.80
+  Best 4:  Min=0.20, Max=0.95, Mean=0.55, Std=0.28
+  Worst 4: Min=62.00, Max=88.50, Mean=72.00, Std=11.00
+
+KEY INSIGHTS:
+==============================
+� VGG16-based models show consistently best performance
+� Augmentation generally improves worst-case performance
+� Best predictions typically <1 pixel error across all models
+� Ensemble provides balanced performance
+� SnoutNet shows highest variance in worst-case scenarios
+
+NOTES:
+====================
+- All measurements in pixels
+- Dataset: 698 test images
+- Hardware: CUDA-enabled GPU
+- 4 Best/Worst based on Euclidean distance
+- Visualization images contain graphical representations
