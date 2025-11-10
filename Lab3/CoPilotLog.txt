@@ -89,3 +89,27 @@ Question: "[Dataset error - detection-datasets/pascalvoc2012 doesn't exist on th
 Summary of Response: Fixed Hugging Face dataset path error by changing from incorrect 'detection-datasets/pascalvoc2012' to correct 'scene_parse_150' dataset. Updated the script to use a working dataset that's actually available on Hugging Face Hub for segmentation tasks.
 
 ================================================================================
+
+Date: November 9, 2025
+Time: ~[Current Time]
+Question: "Update I have gone an seperately downloaded the data set required for this in the folder pascal-voc-2012-dataset and have made it part of the gitignore. Anyalze this folder dataset"
+
+Summary of Response: Analyzed the manually downloaded PASCAL VOC 2012 dataset structure in the pascal-voc-2012-dataset folder. Examined the directory structure, file formats, and organization to understand how to properly load and use this dataset for FCN-ResNet50 evaluation in Step 1 of Lab 3.
+
+================================================================================
+
+Date: November 9, 2025
+Time: ~[Current Time]
+Question: "can into this error running if from teh lab3 directory coudl this be the dataset issue or a model issue ?"
+
+Summary of Response: Debugging script execution error when running from lab3 directory. Checked for potential dataset path issues since the script was designed to run from root directory but user is running from Lab3. Modified the dataset path to work correctly from Lab3 directory location.
+
+================================================================================
+
+Date: November 9, 2025
+Time: ~[Current Time]
+Question: "[AttributeError: Can't get local object 'main.<locals>.<lambda>' - multiprocessing error with DataLoader]"
+
+Summary of Response: Fixed multiprocessing/pickling error with DataLoader caused by lambda function in transforms. The lambda function in target_transform cannot be pickled when using num_workers > 0. Modified the transform to use a named function instead of lambda, and set num_workers=0 as alternative fix for Windows multiprocessing issues.
+
+================================================================================
