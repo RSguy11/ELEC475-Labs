@@ -13,6 +13,8 @@ import sys
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from PIL import Image
+import json
+from datetime import datetime
 
 # Add parent directories to path
 sys.path.append('../2_2_Custom_SMNet')
@@ -27,18 +29,71 @@ VOC_CLASSES = [
     'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor'
 ]
 
+def load_training_history(base_dim):
+    """Load training history if available."""
+    possible_paths = [
+        f'smnet_training_history_base{base_dim}.json',
+        f'training_history_base{base_dim}.json'
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                return json.load(f)
+    return None
+
+def plot_simple_loss_curves(history, test_loss, base_dim):
+    """Create simple loss and mIoU plots."""
+    if history is None:
+        print("[WARNING] No training history found - cannot create training plots")
+        return
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    epochs = range(1, len(history['train_losses']) + 1)
+    
+    # Loss plot
+    ax1.plot(epochs, history['train_losses'], 'b-', label='Training Loss')
+    ax1.plot(epochs, history['val_losses'], 'r-', label='Validation Loss')
+    ax1.axhline(y=test_loss, color='green', linestyle='--', label=f'Test Loss ({test_loss:.4f})')
+    ax1.set_title('Loss Over Training')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss')
+    ax1.legend()
+    ax1.grid(True)
+    
+    # mIoU plot (if available)
+    if 'val_mious' in history:
+        ax2.plot(epochs, history['val_mious'], 'r-', label='Validation mIoU')
+        if 'train_mious' in history:
+            ax2.plot(epochs, history['train_mious'], 'b-', label='Training mIoU')
+        ax2.set_title('mIoU Over Training')
+        ax2.set_xlabel('Epoch')
+        ax2.set_ylabel('mIoU')
+        ax2.legend()
+        ax2.grid(True)
+    else:
+        ax2.text(0.5, 0.5, 'mIoU data not available', ha='center', va='center', transform=ax2.transAxes)
+    
+    plt.tight_layout()
+    plt.savefig(f'plots/loss_miou_plots_base{base_dim}.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    print(f"[FILE] Loss and mIoU plots saved: plots/loss_miou_plots_base{base_dim}.png")
+
 def load_smnet_model(model_path, base_dim, device):
     """Load the trained SMNet model."""
     model = SMNet(num_classes=21, base_dim=base_dim).to(device)
     
-    if os.path.exists(model_path):
-        model.load_state_dict(torch.load(model_path, map_location=device))
-        print(f"SMNet model loaded from {model_path}")
-        model.eval()
-        return model
-    else:
+    # Try current directory first, then the model path
+    if os.path.exists(f'best_smnet_model_base{base_dim}.pth'):
+        model_path = f'best_smnet_model_base{base_dim}.pth'
+    elif not os.path.exists(model_path):
         print(f"Model file {model_path} not found!")
         return None
+    
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    print(f"SMNet model loaded from {model_path}")
+    model.eval()
+    return model
 
 def calculate_miou(pred, target, num_classes=21):
     """Calculate mean IoU for segmentation."""
@@ -176,18 +231,22 @@ def print_detailed_results(class_ious, overall_miou, avg_loss, inference_speed, 
     print(f"   Best performing:     {VOC_CLASSES[np.argmax(class_ious)]} ({np.max(class_ious):.4f})")
     print(f"   Worst performing:    {VOC_CLASSES[np.argmax(class_ious[class_ious > 0])]} ({np.min(class_ious[class_ious > 0]):.4f})")
 
-def create_visualization(model, test_dataset, device, num_samples=4):
-    """Create segmentation visualization."""
+def create_visualization(model, test_dataset, device, base_dim):
+    """Create segmentation visualization with exactly 4 examples."""
     model.eval()
     
-    fig, axes = plt.subplots(num_samples, 3, figsize=(12, 3*num_samples))
+    # Ensure we don't go beyond dataset size
+    dataset_size = len(test_dataset)
+    sample_indices = []
+    for i in range(4):
+        idx = min(i * (dataset_size // 4), dataset_size - 1)
+        sample_indices.append(idx)
     
-    # Color map for visualization
-    colors = plt.cm.tab20(np.linspace(0, 1, 21))
+    fig, axes = plt.subplots(4, 3, figsize=(12, 16))
     
-    for i in range(num_samples):
+    for i, sample_idx in enumerate(sample_indices):
         # Get sample
-        image, target = test_dataset[i * 50]  # Sample every 50th image
+        image, target = test_dataset[sample_idx]
         
         # Denormalize image for visualization
         mean = np.array([0.485, 0.456, 0.406])
@@ -215,15 +274,15 @@ def create_visualization(model, test_dataset, device, num_samples=4):
         axes[i, 2].set_title('Prediction')
         axes[i, 2].axis('off')
     
+    plt.suptitle(f'SMNet Base-{base_dim} Segmentation Examples', fontsize=14, fontweight='bold')
     plt.tight_layout()
     
-    # Save visualization
-    os.makedirs('test_results', exist_ok=True)
-    plt.savefig('test_results/smnet_segmentation_examples.png', 
+    # Save to visualization folder
+    plt.savefig(f'visualizations/segmentation_examples_base{base_dim}.png', 
                 dpi=300, bbox_inches='tight')
     plt.close()
     
-    print(f"[FILE] Visualization saved: test_results/smnet_segmentation_examples.png")
+    print(f"[FILE] 4 segmentation examples saved: visualizations/segmentation_examples_base{base_dim}.png")
 
 def main():
     """Main testing function for SMNet."""
@@ -237,6 +296,8 @@ def main():
                        help='Maximum samples for quick testing. Default: None (use all)')
     parser.add_argument('--visualize', action='store_true',
                        help='Create segmentation visualizations')
+    parser.add_argument('--plot-training', action='store_true', default=True,
+                       help='Create training curve plots. Default: True')
     
     args = parser.parse_args()
     
@@ -311,9 +372,14 @@ def main():
     # Print results
     print_detailed_results(class_ious, overall_miou, avg_loss, inference_speed, model_info)
     
+    # Create simple loss and mIoU plots
+    if args.plot_training:
+        training_history = load_training_history(args.base_dim)
+        plot_simple_loss_curves(training_history, avg_loss, args.base_dim)
+    
     # Create visualizations if requested
     if args.visualize:
-        create_visualization(model, test_dataset, device)
+        create_visualization(model, test_dataset, device, args.base_dim)
     
     print(f"\n[OK] SMNet testing completed!")
 

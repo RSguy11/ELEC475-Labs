@@ -13,12 +13,30 @@ import os
 import argparse
 import sys
 from tqdm import tqdm
+import json
+from datetime import datetime
 
 # Add parent directories to path
 sys.path.append('../2_2_Custom_SMNet')
 sys.path.append('../2_1_Evaluate_Model')
 from model import SMNet
 from step1_local_voc import LocalVOCDataset, squeeze_and_long
+
+def save_training_history(train_losses, val_losses, train_mious, val_mious, 
+                         learning_rates, model_info, base_dim, num_epochs):
+    """Save simple training history to JSON file."""
+    history = {
+        'train_losses': train_losses,
+        'val_losses': val_losses,
+        'train_mious': train_mious,
+        'val_mious': val_mious,
+        'learning_rates': learning_rates
+    }
+    
+    with open(f'smnet_training_history_base{base_dim}.json', 'w') as f:
+        json.dump(history, f, indent=2)
+    
+    print(f"[FILE] Training history saved: smnet_training_history_base{base_dim}.json")
 
 def calculate_miou(pred, target, num_classes=21):
     """Calculate mean IoU for segmentation."""
@@ -147,6 +165,8 @@ def train_smnet(base_dim=16, num_epochs=50, batch_size=8, learning_rate=0.001, m
     val_losses = []
     train_mious = []
     val_mious = []
+    learning_rates = []
+    val_mious = []
     
     print(f"\nStarting training for {num_epochs} epochs...")
     print("-" * 80)
@@ -229,6 +249,9 @@ def train_smnet(base_dim=16, num_epochs=50, batch_size=8, learning_rate=0.001, m
         val_losses.append(avg_val_loss)
         val_mious.append(avg_val_miou)
         
+        # Store learning rate
+        learning_rates.append(optimizer.param_groups[0]['lr'])
+        
         # Update learning rate
         scheduler.step(avg_val_loss)
         
@@ -241,11 +264,16 @@ def train_smnet(base_dim=16, num_epochs=50, batch_size=8, learning_rate=0.001, m
         # Save best model based on validation mIoU
         if avg_val_miou > best_val_miou:
             best_val_miou = avg_val_miou
+            # Save to parent directory
             model_path = f'best_smnet_model_base{base_dim}.pth'
             torch.save(model.state_dict(), model_path)
             print(f'New best model saved! Val mIoU: {avg_val_miou:.4f}')
         
         print("-" * 80)
+    
+    # Save comprehensive training history
+    save_training_history(train_losses, val_losses, train_mious, val_mious,
+                         learning_rates, model_info, base_dim, num_epochs)
     
     # Plot training curves
     plot_training_curves(train_losses, val_losses, train_mious, val_mious, base_dim)
@@ -282,11 +310,13 @@ def plot_training_curves(train_losses, val_losses, train_mious, val_mious, base_
     
     plt.tight_layout()
     
-    # Save plot
-    os.makedirs('training_results', exist_ok=True)
-    plt.savefig(f'training_results/smnet_training_curves_base{base_dim}.png', 
+    # Save plot to plots directory
+    os.makedirs('plots', exist_ok=True)
+    plt.savefig(f'plots/training_curves_base{base_dim}.png', 
                 dpi=300, bbox_inches='tight')
     plt.close()
+    
+    print(f"[FILE] Training curves saved: plots/training_curves_base{base_dim}.png")
 
 def main():
     """Main training function for SMNet."""
@@ -326,8 +356,9 @@ def main():
         )
         
         print("\n[OK] Training completed successfully!")
-        print(f"[FILE] Model saved as: best_smnet_model_base{args.base_dim}.pth")
-        print(f"[FILE] Training plots saved as: training_results/smnet_training_curves_base{args.base_dim}.png")
+        print(f"[FILE] Model saved: best_smnet_model_base{args.base_dim}.pth")
+        print(f"[FILE] Training history: smnet_training_history_base{args.base_dim}.json") 
+        print(f"[FILE] Training curves: plots/training_curves_base{args.base_dim}.png")
         print(f"[METRIC] Final validation mIoU: {val_mious[-1]:.4f}")
         print(f"[METRIC] Best validation mIoU: {max(val_mious):.4f}")
         
