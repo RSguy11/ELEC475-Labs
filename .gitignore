@@ -1,6 +1,8 @@
 # Dataset files - too large for Git
 oxford-iiit-pet-noses/
 
+
+
 # Python cache
 __pycache__/
 *.pyc
@@ -13,6 +15,8 @@ __pycache__/
 venv/
 env/
 
+
+
 # IDE files
 .vscode/
 .idea/
@@ -20,6 +24,7 @@ env/
 # Temporary files
 *.tmp
 *.temp
+*.xml
 
 # Log files
 *.log

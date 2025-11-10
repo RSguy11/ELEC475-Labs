@@ -211,120 +211,6 @@ def visualize_best_worst_predictions(model, test_dataset, device, euclidean_dist
     plt.savefig(f'{results_dir}/{filename}', dpi=300, bbox_inches='tight')
     plt.close()  # Close figure instead of showing to prevent stalling during automation
 
-def visualize_four_examples(model, test_dataset, device, euclidean_distances, model_condition):
-    """Create four specific visualization examples for lab report"""
-    
-    # Select diverse examples based on error range
-    sorted_indices = np.argsort(euclidean_distances)
-    
-    # Select 4 strategic examples:
-    # 1. Best case (lowest error)
-    # 2. Good case (25th percentile) 
-    # 3. Challenging case (75th percentile)
-    # 4. Worst case (highest error)
-    
-    n_samples = len(euclidean_distances)
-    selected_indices = [
-        sorted_indices[0],                          # Best
-        sorted_indices[int(0.25 * n_samples)],     # Good
-        sorted_indices[int(0.75 * n_samples)],     # Challenging
-        sorted_indices[-1]                          # Worst
-    ]
-    
-    case_labels = ['Best Case', 'Good Case', 'Challenging Case', 'Worst Case']
-    
-    fig, axes = plt.subplots(2, 4, figsize=(24, 12))
-    fig.suptitle(f'SnoutNet-V {model_condition} - Four Representative Examples\nFor Lab Report Visualization', 
-                fontsize=18, fontweight='bold')
-    
-    model.eval()
-    
-    for i, (idx, case_label) in enumerate(zip(selected_indices, case_labels)):
-        image, true_coords = test_dataset[idx]
-        image = image.unsqueeze(0).to(device)
-        
-        with torch.no_grad():
-            pred_coords = model(image).cpu().numpy()[0]
-        
-        # Convert to displayable format
-        image_np = image.cpu().squeeze().permute(1, 2, 0).numpy()
-        filename = test_dataset.data[idx][0]
-        
-        # Top row: Original image with predictions
-        if image_np.shape[2] == 1:  # Grayscale
-            image_np = image_np.squeeze()
-            axes[0, i].imshow(image_np, cmap='gray')
-        else:  # Color
-            image_np = np.clip(image_np, 0, 1)
-            axes[0, i].imshow(image_np)
-        
-        # Add prediction overlays with enhanced visibility
-        axes[0, i].scatter(true_coords[0], true_coords[1], c='lime', s=200, marker='o', 
-                         label='Ground Truth', linewidths=3, edgecolors='black')
-        axes[0, i].scatter(pred_coords[0], pred_coords[1], c='red', s=200, marker='x', 
-                         label='Prediction', linewidths=4)
-        
-        # Draw connecting line to show error
-        axes[0, i].plot([true_coords[0], pred_coords[0]], [true_coords[1], pred_coords[1]], 
-                       'yellow', linewidth=2, linestyle='--', alpha=0.8)
-        
-        error = euclidean_distances[idx]
-        axes[0, i].set_title(f'{case_label}\nError: {error:.2f} pixels', 
-                           fontsize=12, fontweight='bold')
-        axes[0, i].legend(loc='upper right', fontsize=10)
-        axes[0, i].axis('off')
-        
-        # Bottom row: Zoomed view around nose area
-        # Create zoomed view (50x50 pixel region around true nose)
-        zoom_size = 50
-        center_x, center_y = int(true_coords[0]), int(true_coords[1])
-        
-        # Calculate zoom bounds with boundary checking
-        x_min = max(0, center_x - zoom_size//2)
-        x_max = min(image_np.shape[1] if len(image_np.shape) > 2 else image_np.shape[0], 
-                   center_x + zoom_size//2)
-        y_min = max(0, center_y - zoom_size//2)
-        y_max = min(image_np.shape[0], center_y + zoom_size//2)
-        
-        if len(image_np.shape) == 3:
-            zoomed_img = image_np[y_min:y_max, x_min:x_max, :]
-        else:
-            zoomed_img = image_np[y_min:y_max, x_min:x_max]
-        
-        if len(image_np.shape) == 2:
-            axes[1, i].imshow(zoomed_img, cmap='gray')
-        else:
-            axes[1, i].imshow(zoomed_img)
-        
-        # Adjust coordinates for zoomed view
-        true_x_zoom = true_coords[0] - x_min
-        true_y_zoom = true_coords[1] - y_min
-        pred_x_zoom = pred_coords[0] - x_min
-        pred_y_zoom = pred_coords[1] - y_min
-        
-        axes[1, i].scatter(true_x_zoom, true_y_zoom, c='lime', s=300, marker='o', 
-                         linewidths=4, edgecolors='black')
-        axes[1, i].scatter(pred_x_zoom, pred_y_zoom, c='red', s=300, marker='x', 
-                         linewidths=5)
-        axes[1, i].plot([true_x_zoom, pred_x_zoom], [true_y_zoom, pred_y_zoom], 
-                       'yellow', linewidth=3, linestyle='--', alpha=0.9)
-        
-        axes[1, i].set_title(f'Zoomed View\n{filename}', fontsize=10, fontweight='bold')
-        axes[1, i].axis('off')
-    
-    plt.tight_layout(pad=3.0, h_pad=3.0, w_pad=2.0)
-    
-    # Save to Results_Images folder
-    folder_name = "Augmented" if "augmented" in model_condition.lower() else "Baseline"
-    results_dir = f"Results_Images/{folder_name}"
-    os.makedirs(results_dir, exist_ok=True)
-    
-    filename = f'vgg16_four_examples_{model_condition.lower()}.png'
-    plt.savefig(f'{results_dir}/{filename}', dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    return selected_indices, case_labels
-
 def main():
     """Main visualization function for VGG16"""
     
@@ -401,11 +287,6 @@ def main():
         print("Generating best/worst prediction examples...")
         visualize_best_worst_predictions(model, test_dataset, device, euclidean_distances, model_condition)
         print(f"Best/worst predictions plot saved to Results_Images/{model_condition}/")
-    
-    # Always generate four examples for lab report
-    print("Generating four representative examples for lab report...")
-    selected_indices, case_labels = visualize_four_examples(model, test_dataset, device, euclidean_distances, model_condition)
-    print(f"Four examples plot saved to Results_Images/{model_condition}/")
     
     print(f"\n[OK] VGG16 visualization completed! Check Results_Images/ for detailed analysis plots.")
 
