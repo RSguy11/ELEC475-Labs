@@ -47,6 +47,9 @@ def plot_simple_loss_curves(history, test_loss, base_dim):
         print("[WARNING] No training history found - cannot create training plots")
         return
     
+    # Create plots directory if it doesn't exist
+    os.makedirs('plots', exist_ok=True)
+    
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
     epochs = range(1, len(history['train_losses']) + 1)
     
@@ -176,7 +179,7 @@ def calculate_inference_speed(model, test_loader, device, num_batches=10):
     times = []
     
     with torch.no_grad():
-        for i, (images, _) in enumerate(test_loader):
+        for i, (images, _) in enumerate(tqdm(test_loader, desc="Testing")):
             if i >= num_batches:
                 break
                 
@@ -234,6 +237,9 @@ def print_detailed_results(class_ious, overall_miou, avg_loss, inference_speed, 
 def create_visualization(model, test_dataset, device, base_dim):
     """Create segmentation visualization with exactly 4 examples."""
     model.eval()
+    
+    # Create visualizations directory if it doesn't exist
+    os.makedirs('visualizations', exist_ok=True)
     
     # Ensure we don't go beyond dataset size
     dataset_size = len(test_dataset)
@@ -294,8 +300,8 @@ def main():
                        help='Batch size for testing. Default: 8')
     parser.add_argument('--max-samples', type=int, default=None,
                        help='Maximum samples for quick testing. Default: None (use all)')
-    parser.add_argument('--visualize', action='store_true',
-                       help='Create segmentation visualizations')
+    parser.add_argument('--visualize', action='store_true', default=True,
+                       help='Create segmentation visualizations. Default: True')
     parser.add_argument('--plot-training', action='store_true', default=True,
                        help='Create training curve plots. Default: True')
     

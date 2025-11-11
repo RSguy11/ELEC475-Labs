@@ -8,26 +8,17 @@ class CustomConvBlock(nn.Module):
         super(CustomConvBlock, self).__init__()
         
         self.use_residual = use_residual and in_channels == out_channels and stride == 1
-
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding=kernel_size//2, bias=False)
+        
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size, stride, 
+                              padding=kernel_size//2, bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels)
-        
-        self.conv2 = nn.Conv2d(out_channels, out_channels, 1, bias=False)  # 1x1 conv
-        self.bn2 = nn.BatchNorm2d(out_channels)
-        
-        self.activation = nn.GELU()
+        self.activation = nn.ReLU()
         
     def forward(self, x):
         identity = x
         
-        # Main path
         out = self.conv1(x)
         out = self.bn1(out)
-        out = self.activation(out)
-        
-        # Refinement
-        out = self.conv2(out)
-        out = self.bn2(out)
         
         # Residual connection if applicable
         if self.use_residual:
@@ -37,22 +28,19 @@ class CustomConvBlock(nn.Module):
         return out
 
 class SimpleUpsampler(nn.Module):
-    def __init__(self, high_ch, low_ch, out_ch, skip_ch=32):
+    """Simple upsampler"""
+    def __init__(self, high_ch, low_ch, out_ch):
         super().__init__()
-
-        self.lateral = nn.Conv2d(low_ch, skip_ch, 1, bias=False) 
-
-        self.fuse    = nn.Sequential(
-            nn.Conv2d(high_ch + skip_ch, out_ch, 3, padding=1, bias=False),
+        
+        self.fuse = nn.Sequential(
+            nn.Conv2d(high_ch + low_ch, out_ch, 3, padding=1, bias=False),
             nn.BatchNorm2d(out_ch),
-            nn.GELU()
+            nn.ReLU()
         )
 
     def forward(self, high_feat, low_feat):
         up = F.interpolate(high_feat, size=low_feat.shape[-2:], mode='bilinear', align_corners=False)
-        skip = self.lateral(low_feat)
-
-        return self.fuse(torch.cat([up, skip], dim=1))
+        return self.fuse(torch.cat([up, low_feat], dim=1))
 
 class SMNet(nn.Module):
     """
@@ -62,28 +50,28 @@ class SMNet(nn.Module):
     def __init__(self, num_classes=21, base_dim=16):
         super(SMNet, self).__init__()
         
-        # Initial feature extraction
-        self.stem = CustomConvBlock(3, base_dim, kernel_size=7, stride=1)
+        # Simple initial feature extraction
+        self.stem = CustomConvBlock(3, base_dim, kernel_size=3, stride=1)
         
-        # Simple Encoder - Progressive feature extraction
-        self.encoder1 = CustomConvBlock(base_dim, base_dim*2, stride=2, use_residual=False)      # H/2
-        self.encoder2 = CustomConvBlock(base_dim*2, base_dim*3, stride=2, use_residual=True)     # H/4
-        self.encoder3 = CustomConvBlock(base_dim*3, base_dim*4, stride=2, use_residual=True)     # H/8
-        self.encoder4 = CustomConvBlock(base_dim*4, base_dim*5, stride=2, use_residual=True)     # H/16
+        # Simple Encoder
+        self.encoder1 = CustomConvBlock(base_dim, base_dim*2, stride=2, use_residual=False)
+        self.encoder2 = CustomConvBlock(base_dim*2, base_dim*3, stride=2, use_residual=True)
+        self.encoder3 = CustomConvBlock(base_dim*3, base_dim*4, stride=2, use_residual=True)
+        self.encoder4 = CustomConvBlock(base_dim*4, base_dim*5, stride=2, use_residual=True)
         
-        # Simple Bottleneck - just additional processing
+        # Simple Bottleneck
         self.bottleneck = CustomConvBlock(base_dim*5, base_dim*5, use_residual=True)
         
-        # Simple Decoder with progressive upsampling
-        self.decoder4 = SimpleUpsampler(base_dim*5, base_dim*4, base_dim*4)   # H/8
-        self.decoder3 = SimpleUpsampler(base_dim*4, base_dim*3, base_dim*3)   # H/4  
-        self.decoder2 = SimpleUpsampler(base_dim*3, base_dim*2, base_dim*2)   # H/2
-        self.decoder1 = SimpleUpsampler(base_dim*2, base_dim, base_dim)       # H
+        # Simple Decoder
+        self.decoder4 = SimpleUpsampler(base_dim*5, base_dim*4, base_dim*4)
+        self.decoder3 = SimpleUpsampler(base_dim*4, base_dim*3, base_dim*3)
+        self.decoder2 = SimpleUpsampler(base_dim*3, base_dim*2, base_dim*2)
+        self.decoder1 = SimpleUpsampler(base_dim*2, base_dim, base_dim)
         
         # Simple segmentation head
         self.seg_head = nn.Sequential(
             CustomConvBlock(base_dim, base_dim//2, kernel_size=3),
-            nn.Conv2d(base_dim//2, num_classes, 1)  # Final 1x1 classif ier
+            nn.Conv2d(base_dim//2, num_classes, 1)
         )
         
         self.base_dim = base_dim
@@ -127,11 +115,10 @@ class SMNet(nn.Module):
             'base_dimension': self.base_dim,
             'total_parameters': total_params,
             'custom_features': [
-                'Simple encoder-decoder structure', 
-                'Basic upsampling with skip connections',
-                'Residual connections in encoder',
-                'Lightweight design',
+                'Simple encoder-decoder architecture', 
+                'Basic skip connections',
+                'Residual connections',
                 'Progressive dimension scaling (2x, 3x, 4x, 5x)'
             ],
-            'architecture_type': 'Simplified Custom Encoder-Decoder'
+            'architecture_type': 'Simple Custom Encoder-Decoder'
         }

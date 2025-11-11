@@ -4,6 +4,7 @@ ELEC475 Lab 3 - Step 2.3: Train SMNet Custom Segmentation Model
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
@@ -21,6 +22,29 @@ sys.path.append('../2_2_Custom_SMNet')
 sys.path.append('../2_1_Evaluate_Model')
 from model import SMNet
 from step1_local_voc import LocalVOCDataset, squeeze_and_long
+
+class FocalLoss(nn.Module):
+    """Focal Loss to handle class imbalance - focuses on hard examples."""
+    def __init__(self, alpha=1, gamma=4, ignore_index=255, reduction='mean'):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.ignore_index = ignore_index
+        self.reduction = reduction
+
+    def forward(self, inputs, targets):
+        # Standard cross entropy
+        ce_loss = F.cross_entropy(inputs, targets, ignore_index=self.ignore_index, reduction='none')
+        
+        # Calculate p_t
+        pt = torch.exp(-ce_loss)
+        
+        # Focal loss formula: FL = -α(1-pt)^γ * log(pt)
+        focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+        
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        return focal_loss
 
 def save_training_history(train_losses, val_losses, train_mious, val_mious, 
                          learning_rates, model_info, base_dim, num_epochs):
@@ -70,7 +94,7 @@ def calculate_batch_miou(predictions, targets, num_classes=21):
     
     return batch_miou / valid_samples if valid_samples > 0 else 0.0
 
-def train_smnet(base_dim=16, num_epochs=50, batch_size=8, learning_rate=0.001, max_samples=None):
+def train_smnet(base_dim=32, num_epochs=50, batch_size=8, learning_rate=0.001, max_samples=None):
     """Train SMNet custom segmentation model."""
     
     # Set device
@@ -152,13 +176,11 @@ def train_smnet(base_dim=16, num_epochs=50, batch_size=8, learning_rate=0.001, m
     model_info = model.get_model_info()
     print(f"Model initialized: {model_info['model_name']}")
     print(f"Total parameters: {model_info['total_parameters']:,}")
-    
-    # Loss function - Cross-entropy for segmentation
-    criterion = nn.CrossEntropyLoss(ignore_index=255)  # Ignore void class
-    
-    # Optimizer and scheduler
-    optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5, verbose=True)
+
+    # Loss function - Focal Loss with working parameters from quick_focal_train
+    criterion = FocalLoss(alpha=1, gamma=3, ignore_index=255)  # Working parameters: gamma=3, alpha=1    # Optimizer and scheduler - Lower learning rate like quick_focal_train
+    optimizer = optim.AdamW(model.parameters(), lr=learning_rate*0.5, weight_decay=1e-4)  # 5e-4 LR
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=3, factor=0.5, verbose=True)
     
     # Training history
     train_losses = []
@@ -322,8 +344,8 @@ def main():
     """Main training function for SMNet."""
     
     parser = argparse.ArgumentParser(description='Train SMNet custom segmentation model')
-    parser.add_argument('--base-dim', type=int, default=16,
-                       help='Base dimension for model channels. Default: 16')
+    parser.add_argument('--base-dim', type=int, default=32,
+                       help='Base dimension for model channels. Default: 32')
     parser.add_argument('--epochs', type=int, default=50,
                        help='Number of training epochs. Default: 50')
     parser.add_argument('--batch-size', type=int, default=8,

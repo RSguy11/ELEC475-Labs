@@ -79,13 +79,38 @@ def squeeze_and_long(x):
 
 def cosine_feature_loss(student_features, teacher_features):
     """Calculate cosine similarity loss between feature maps."""
+    # Ensure features are valid and have the same batch size
+    if student_features.shape[0] != teacher_features.shape[0]:
+        raise ValueError(f"Batch size mismatch: student {student_features.shape[0]} vs teacher {teacher_features.shape[0]}")
+    
     # Flatten feature maps
     student_flat = student_features.view(student_features.size(0), -1)
     teacher_flat = teacher_features.view(teacher_features.size(0), -1)
     
-    # Normalize features
-    student_norm = F.normalize(student_flat, p=2, dim=1)
-    teacher_norm = F.normalize(teacher_flat, p=2, dim=1)
+    # Make sure both have same number of features by interpolating if needed
+    if student_flat.shape[1] != teacher_flat.shape[1]:
+        # Reshape to match the smaller one
+        min_features = min(student_flat.shape[1], teacher_flat.shape[1])
+        if student_flat.shape[1] > min_features:
+            student_flat = student_flat[:, :min_features]
+        if teacher_flat.shape[1] > min_features:
+            teacher_flat = teacher_flat[:, :min_features]
+    
+    # Check for NaN or infinite values
+    if torch.isnan(student_flat).any() or torch.isinf(student_flat).any():
+        print("Warning: NaN or Inf in student features, replacing with zeros")
+        student_flat = torch.where(torch.isnan(student_flat) | torch.isinf(student_flat), 
+                                   torch.zeros_like(student_flat), student_flat)
+    
+    if torch.isnan(teacher_flat).any() or torch.isinf(teacher_flat).any():
+        print("Warning: NaN or Inf in teacher features, replacing with zeros")
+        teacher_flat = torch.where(torch.isnan(teacher_flat) | torch.isinf(teacher_flat), 
+                                   torch.zeros_like(teacher_flat), teacher_flat)
+    
+    # Normalize features with epsilon for numerical stability
+    eps = 1e-8
+    student_norm = F.normalize(student_flat + eps, p=2, dim=1)
+    teacher_norm = F.normalize(teacher_flat + eps, p=2, dim=1)
     
     # Cosine similarity loss (1 - cosine_similarity)
     cosine_sim = F.cosine_similarity(student_norm, teacher_norm, dim=1)
@@ -117,7 +142,11 @@ def evaluate_model(model, dataloader, device, model_name):
             
             # Measure inference time
             start_time = time.time()
-            outputs = model(images)['out']
+            outputs = model(images)
+            # Handle different model output formats
+            if isinstance(outputs, dict):
+                outputs = outputs['out']  # FCN-ResNet50 format
+            # SMNet returns tensor directly
             inference_time = time.time() - start_time
             inference_times.append(inference_time)
             
@@ -184,7 +213,7 @@ def dataLoader():
             split='train',  # Use training data for knowledge distillation
             transform=transform,
             target_transform=target_transform,
-            max_samples=None  # Use full dataset for 50 epochs
+            max_samples=None  # Full dataset now with lighter base16 model
         )
     except FileNotFoundError as e:
         print(f"Dataset file not found: {e}")
@@ -196,29 +225,72 @@ def dataLoader():
         print("Current directory:", os.getcwd())
         return
     
-    dataloader = DataLoader(dataset, batch_size=4, shuffle=False, num_workers=0)  # num_workers=0 fixes Windows multiprocessing issues
+    dataloader = DataLoader(dataset, batch_size=4, shuffle=False, num_workers=0, pin_memory=True)  # Back to batch_size=4 for full dataset
     return dataloader
     
 def load_smnet_model(base_dim, device):
-    """Load the trained SMNet model."""
+    """Load the trained SMNet model with error handling for architecture mismatches."""
     model = SMNet(num_classes=21, base_dim=base_dim).to(device)
     
     # Look for model in 2_3_train_test_model directory
     model_path = f'../2_3_train_test_model/best_smnet_model_base{base_dim}.pth'
     
     if not os.path.exists(model_path):
-        print(f"Model file {model_path} not found!")
-        return None
+        print(f"Model file {model_path} not found! Starting with random weights.")
+        model.train()  # Set to training mode for distillation
+        return model
     
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    print(f"SMNet model loaded from {model_path}")
+    try:
+        model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+        print(f"SMNet model loaded from {model_path}")
+    except RuntimeError as e:
+        print(f"Warning: Cannot load weights from {model_path} due to architecture mismatch:")
+        print(f"Error: {str(e)[:200]}...")
+        print("Starting with randomly initialized weights instead.")
+    
     model.train()  # Set to training mode for distillation
     return model
+
+def load_checkpoint(checkpoint_path, model, optimizer=None, device='cpu'):
+    """
+    Load a checkpoint and return the epoch, loss, and loss history.
+    
+    Args:
+        checkpoint_path: Path to the checkpoint file
+        model: Student model to load state into
+        optimizer: Optimizer to load state into (optional)
+        device: Device to load the checkpoint on
+    
+    Returns:
+        tuple: (start_epoch, loss, loss_history)
+    """
+    if os.path.exists(checkpoint_path):
+        print(f"Loading checkpoint from: {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+        
+        model.load_state_dict(checkpoint['model_state_dict'])
+        
+        if optimizer is not None:
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        
+        start_epoch = checkpoint['epoch']
+        loss = checkpoint['loss']
+        loss_history = checkpoint.get('loss_history', {'total': [], 'response': [], 'hard': [], 'feature': []})
+        
+        print(f"Loaded checkpoint from epoch {start_epoch} with loss {loss:.4f}")
+        return start_epoch, loss, loss_history
+    else:
+        print(f"No checkpoint found at: {checkpoint_path}")
+        return 0, float('inf'), {'total': [], 'response': [], 'hard': [], 'feature': []}
 
 def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Device: {device}")
-
+    
+    if torch.cuda.is_available():
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
+        print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+    
     print("Loading FCN-ResNet50...")
     teacher_model = fcn_resnet50(weights='DEFAULT').to(device)
     teacher_model.eval()
@@ -233,43 +305,49 @@ def main():
     # Setup optimizer for distillation training
     optimizer = torch.optim.Adam(student_model.parameters(), lr=1e-4)
     
-    # Track losses for visualization
-    loss_history = {'total': [], 'response': [], 'hard': [], 'feature': []}
+    # Checkpoint saving setup
+    import os
+    checkpoint_dir = 'checkpoints'
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    
+    # Check for existing checkpoint to resume training
+    resume_from_checkpoint = True  # Set to False to start fresh
+    latest_checkpoint = os.path.join(checkpoint_dir, 'smnet_distilled_latest.pth')
+    
+    if resume_from_checkpoint and os.path.exists(latest_checkpoint):
+        start_epoch, best_loss, loss_history = load_checkpoint(latest_checkpoint, student_model, optimizer, device)
+        print(f"Resuming training from epoch {start_epoch}")
+    else:
+        start_epoch = 0
+        best_loss = float('inf')
+        loss_history = {'total': [], 'response': [], 'hard': [], 'feature': []}
+        print("Starting fresh training")
     
     print("Starting knowledge distillation training...")
+    print(f"Best and latest checkpoints will be saved in '{checkpoint_dir}/' directory")
     
-    # Train for 50 epochs
-    num_epochs = 50
-    for epoch in range(num_epochs):
+    # Train for 30 epochs for thorough knowledge distillation
+    num_epochs = 30
+    for epoch in range(start_epoch, num_epochs):
         epoch_losses = {'total': [], 'response': [], 'hard': [], 'feature': []}
         
-        for batch_idx, (images, targets) in enumerate(dataloader):
+        # Create progress bar for this epoch
+        epoch_pbar = tqdm(dataloader, desc=f'Epoch {epoch+1}/{num_epochs}', 
+                         unit='batch', leave=True)
+        
+        for batch_idx, (images, targets) in enumerate(epoch_pbar):
             images, targets = images.to(device), targets.to(device)
             
-            # Forward through student model
-            student_outputs = student_model(images)['out']
-            
-            # Extract intermediate features from student (encoder output)
-            student_features = student_model(images, return_features=True) if hasattr(student_model, 'return_features') else None
+            # Forward through student model (SMNet returns tensor directly)
+            student_outputs = student_model(images)
             
             # Forward through teacher model (frozen)
             with torch.no_grad():
                 teacher_outputs = teacher_model(images)['out']
-                # Extract intermediate features from teacher (backbone features)
-                teacher_backbone = teacher_model.backbone(images)['out']
             
-            # If student doesn't have feature extraction, use a hook to get encoder features
-            if student_features is None:
-                # Get features from student encoder (assume last encoder layer)
-                with torch.no_grad():
-                    student_model.eval()
-                    student_temp = student_model(images)
-                    student_model.train()
-                # Use student output as feature proxy (simplified)
-                student_features = student_outputs
-                teacher_features = teacher_outputs
-            else:
-                teacher_features = teacher_backbone
+            # Simplified feature-based distillation - use outputs as features
+            student_features = student_outputs
+            teacher_features = teacher_outputs
             
             # Distillation loss parameters
             alpha = 0.5      # Weight for response-based distillation
@@ -277,16 +355,24 @@ def main():
             gamma = 0.2      # Weight for feature-based distillation
             tau = 4.0        # Temperature for softmax
             
+            # Clean targets - replace ignore_index (255) with 0 for loss computation
+            clean_targets = targets.clone()
+            clean_targets[clean_targets == 255] = 0  # Replace ignore_index with background class
+            
             # Response-based distillation loss: L_response = α*H(σ(zs;τ), σ(zt;τ))
             student_soft = F.log_softmax(student_outputs / tau, dim=1)
             response_loss = F.kl_div(student_soft, F.softmax(teacher_outputs / tau, dim=1), reduction='batchmean')
             
-            # Hard target loss: L_hard = β*H(σ(zs;1), y)
+            # Hard target loss: L_hard = β*H(σ(zs;1), y) with ignore_index
             student_hard = F.log_softmax(student_outputs, dim=1)
-            hard_loss = F.nll_loss(student_hard, targets)
+            hard_loss = F.nll_loss(student_hard, targets, ignore_index=255)
             
             # Feature-based distillation loss: L_feature = γ*cosine_loss(f_s, f_t)
-            feature_loss = cosine_feature_loss(student_features, teacher_features)
+            try:
+                feature_loss = cosine_feature_loss(student_features, teacher_features)
+            except Exception as e:
+                print(f"Warning: Feature loss computation failed: {e}")
+                feature_loss = torch.tensor(0.0, device=device)
             
             # Combined loss: L_total = α*L_response*(τ²) + β*L_hard + γ*L_feature
             total_loss = alpha * response_loss * (tau ** 2) + beta * hard_loss + gamma * feature_loss
@@ -295,14 +381,23 @@ def main():
             optimizer.zero_grad()
             total_loss.backward()
             optimizer.step()
+            
+            # Store losses for plotting
+            epoch_losses['response'].append(response_loss.item())
+            epoch_losses['hard'].append(hard_loss.item())
+            epoch_losses['feature'].append(feature_loss.item())
+            epoch_losses['total'].append(total_loss.item())
+            
+            # Update progress bar with current losses
+            epoch_pbar.set_postfix({
+                'Total': f'{total_loss.item():.4f}',
+                'Response': f'{response_loss.item():.4f}',
+                'Hard': f'{hard_loss.item():.4f}',
+                'Feature': f'{feature_loss.item():.4f}'
+            })
         
-        print(f"Epoch {epoch+1}, Batch {batch_idx+1}: Response={response_loss.item():.4f}, Hard={hard_loss.item():.4f}, Feature={feature_loss.item():.4f}, Total={total_loss.item():.4f}")
-        
-        # Store losses for plotting
-        epoch_losses['response'].append(response_loss.item())
-        epoch_losses['hard'].append(hard_loss.item())
-        epoch_losses['feature'].append(feature_loss.item())
-        epoch_losses['total'].append(total_loss.item())
+        # Close progress bar for this epoch
+        epoch_pbar.close()
         
         # Print epoch summary
         if epoch % 5 == 0 or epoch == num_epochs - 1:  # Print every 5 epochs
@@ -319,15 +414,54 @@ def main():
             print("-" * 50)
         
         # Store epoch averages for final plotting
-        loss_history['total'].append(np.mean(epoch_losses['total']))
+        epoch_avg_loss = np.mean(epoch_losses['total'])
+        loss_history['total'].append(epoch_avg_loss)
         loss_history['response'].append(np.mean(epoch_losses['response']))
         loss_history['hard'].append(np.mean(epoch_losses['hard']))
         loss_history['feature'].append(np.mean(epoch_losses['feature']))
+        
+        # Save checkpoints
+        # 1. Save best model based on loss
+        if epoch_avg_loss < best_loss:
+            best_loss = epoch_avg_loss
+            best_model_path = os.path.join(checkpoint_dir, 'smnet_distilled_best.pth')
+            torch.save({
+                'epoch': epoch + 1,
+                'model_state_dict': student_model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': best_loss,
+                'loss_history': loss_history
+            }, best_model_path)
+            print(f"New best model saved (epoch {epoch+1}, loss: {best_loss:.4f}): {best_model_path}")
+        
+        # 2. Save latest model (for resuming training) - overwrite each time
+        latest_model_path = os.path.join(checkpoint_dir, 'smnet_distilled_latest.pth')
+        torch.save({
+            'epoch': epoch + 1,
+            'model_state_dict': student_model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': epoch_avg_loss,
+            'loss_history': loss_history
+        }, latest_model_path)
     
-    # Save distilled model with different name
+    # Save final distilled model (copy from best checkpoint)
     distilled_model_path = f'smnet_distilled_base{16}.pth'
-    torch.save(student_model.state_dict(), distilled_model_path)
-    print(f"Distilled model saved as: {distilled_model_path}")
+    best_model_path = os.path.join(checkpoint_dir, 'smnet_distilled_best.pth')
+    
+    if os.path.exists(best_model_path):
+        # Load best model state
+        best_checkpoint = torch.load(best_model_path, map_location=device, weights_only=False)
+        torch.save(best_checkpoint['model_state_dict'], distilled_model_path)
+        print(f"Final distilled model saved as: {distilled_model_path} (from best checkpoint at epoch {best_checkpoint['epoch']} with loss {best_checkpoint['loss']:.4f})")
+    else:
+        # Fallback to current model state
+        torch.save(student_model.state_dict(), distilled_model_path)
+        print(f"Final distilled model saved as: {distilled_model_path} (current state)")
+    
+    print(f"\nTraining completed!")
+    print(f"Checkpoints saved in: {checkpoint_dir}/")
+    print(f"- Latest: smnet_distilled_latest.pth (for resuming training)")
+    print(f"- Best: smnet_distilled_best.pth (lowest loss model)")
     
     # Evaluate all models
     print("\n" + "="*50)
@@ -400,9 +534,9 @@ def main():
     with torch.no_grad():
         teacher_preds = teacher_model(sample_images[:4])['out'].argmax(dim=1)
         original_student.eval()
-        student_orig_preds = original_student(sample_images[:4])['out'].argmax(dim=1)
+        student_orig_preds = original_student(sample_images[:4]).argmax(dim=1)  # SMNet returns tensor directly
         student_model.eval()
-        student_dist_preds = student_model(sample_images[:4])['out'].argmax(dim=1)
+        student_dist_preds = student_model(sample_images[:4]).argmax(dim=1)  # SMNet returns tensor directly
     
     # Create comparison visualization
     fig, axes = plt.subplots(4, 5, figsize=(20, 16))
