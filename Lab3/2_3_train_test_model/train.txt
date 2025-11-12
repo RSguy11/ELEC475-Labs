@@ -1,0 +1,13 @@
+# SMNet Training Commands for PyCharm Terminal
+
+# Standard training with base dimension 16
+python train.py --base-dim 16 --epochs 50 --batch-size 8 --lr 0.001
+
+# Quick training for testing (reduced epochs and samples)
+python train.py --base-dim 16 --epochs 10 --max-samples 100
+
+# Training with custom learning rate
+python train.py --base-dim 16 --epochs 50 --lr 0.0005
+
+# Default training (base-dim 16, 50 epochs, batch-size 8, lr 0.001)
+python train.py

@@ -1,0 +1,11 @@
+# Response-Based Knowledge Distillation Testing Commands for PyCharm Terminal
+
+# Standard response-based knowledge distillation testing
+python test.py
+
+# Note: This script automatically:
+# - Loads response_based_model.pth
+# - Tests on PASCAL VOC validation set
+# - Compares teacher vs student performance
+# - Generates prediction visualizations
+# - Calculates mIoU and knowledge transfer metrics

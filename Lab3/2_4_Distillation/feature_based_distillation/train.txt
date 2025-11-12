@@ -1,0 +1,11 @@
+# Feature-Based Knowledge Distillation Training Commands for PyCharm Terminal
+
+# Standard feature-based knowledge distillation training
+python train.py
+
+# Note: This script uses fixed parameters:
+# - 150 epochs (extended for knowledge distillation)
+# - Batch size: 8
+# - Loss weights: 30% feature matching + 70% segmentation
+# - Cosine similarity loss on intermediate features
+# - Teacher: FCN-ResNet50, Student: SMNet (base_dim=16)

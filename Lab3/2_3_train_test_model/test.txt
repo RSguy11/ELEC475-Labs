@@ -1,0 +1,16 @@
+# SMNet Testing Commands for PyCharm Terminal
+
+# Standard testing with base dimension 16 (with all visualizations)
+python test.py --base-dim 16 --batch-size 8 --visualize --plot-training
+
+# Quick testing with limited samples
+python test.py --base-dim 16 --max-samples 50 --visualize
+
+# Test without visualizations (faster)
+python test.py --base-dim 16 --batch-size 8 --plot-training
+
+# Test without training plots
+python test.py --base-dim 16 --batch-size 8 --visualize
+
+# Default testing (base-dim 16, all options enabled)
+python test.py

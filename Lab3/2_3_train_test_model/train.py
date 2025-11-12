@@ -344,8 +344,8 @@ def main():
     """Main training function for SMNet."""
     
     parser = argparse.ArgumentParser(description='Train SMNet custom segmentation model')
-    parser.add_argument('--base-dim', type=int, default=32,
-                       help='Base dimension for model channels. Default: 32')
+    parser.add_argument('--base-dim', type=int, default=16,
+                       help='Base dimension for model channels. Default: 16')
     parser.add_argument('--epochs', type=int, default=50,
                        help='Number of training epochs. Default: 50')
     parser.add_argument('--batch-size', type=int, default=8,
