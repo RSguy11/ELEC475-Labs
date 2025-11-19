@@ -1,7 +1,7 @@
 # Dataset files - too large for Git
 oxford-iiit-pet-noses/
 pascal-voc-2012-dataset/
-coco-2014-dataset/
+coco2014/
 
 
 # Python cache
