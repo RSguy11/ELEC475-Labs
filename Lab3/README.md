@@ -8,6 +8,8 @@ for this in so you may donwload it locally to the lab3 directory.
 
 2_3_train_test_model contains standard training and testing **NO DISTILATION**
 
+If extra plots like loss and such are required the models must be trained first
+
 2_4_Distillation - Each contains their own test and train files with options for how to test or train.
     feature_based
     response_based

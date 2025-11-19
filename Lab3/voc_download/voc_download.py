@@ -1,21 +1,32 @@
 #pip install kagglehub
 import kagglehub
 import os
+import shutil
 
 # Get the directory where this script is located
 script_dir = os.path.dirname(os.path.abspath(__file__))
 # Navigate up one level to Lab3 directory
 lab3_dir = os.path.dirname(script_dir)
-# Set the download path to Lab3 directory
-download_path = os.path.join(lab3_dir, "pascal-voc-2012-dataset")
+# Target path in Lab3 directory
+target_path = os.path.join(lab3_dir, "pascal-voc-2012-dataset")
 
-# Ensure the download directory exists
-os.makedirs(download_path, exist_ok=True)
+# Download latest version
+downloaded_path = kagglehub.dataset_download("gopalbhattrai/pascal-voc-2012-dataset")
 
-print(f"Downloading PASCAL VOC 2012 dataset to: {download_path}")
+print("Downloaded to:", downloaded_path)
 
-# Download latest version to specific path
-path = kagglehub.dataset_download("gopalbhattrai/pascal-voc-2012-dataset", path=download_path)
+# If the downloaded path is not in our Lab3 directory, move it there
+if not downloaded_path.startswith(lab3_dir):
+    print(f"Moving dataset from {downloaded_path} to {target_path}")
+    
+    # Remove target if it exists
+    if os.path.exists(target_path):
+        shutil.rmtree(target_path)
+    
+    # Move the dataset
+    shutil.move(downloaded_path, target_path)
+    path = target_path
+else:
+    path = downloaded_path
 
-print("Dataset downloaded successfully!")
-print("Path to dataset files:", path)
+print("Dataset available at:", path)
