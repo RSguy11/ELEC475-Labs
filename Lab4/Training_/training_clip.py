@@ -57,18 +57,35 @@ def train_clip(
 		{"params": model.image_encoder.parameters()},
 		{"params": model.text_encoder.parameters(), "lr": 0.0},  # frozen
 	], lr=lr)
-	# Add learning rate scheduler
 	scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2, verbose=True)
 	scaler = GradScaler('cuda')  # For mixed precision
-	# Set the correct COCO2014 path
 	if data_root is None:
-		data_root = "coco2014"  # relative to this script, adjust if needed
+		data_root = "coco2014"
 	train_loader, val_loader = create_dataloaders(data_root=data_root, batch_size=batch_size, max_samples=max_samples)
 	train_losses, val_losses = [], []
 	recall_history = {k: [] for k in ['Recall@1_i2t','Recall@1_t2i','Recall@5_i2t','Recall@5_t2i','Recall@10_i2t','Recall@10_t2i']}
 	start_time = time.time()
+	checkpoint_path = "clip_best_checkpoint.pth"
+	start_epoch = 0
+	epochs_run = 0
+	# Resume from checkpoint if exists
+	if os.path.exists(checkpoint_path):
+		print(f"Resuming from checkpoint: {checkpoint_path}")
+		checkpoint = torch.load(checkpoint_path, map_location=device)
+		model.load_state_dict(checkpoint['model_state_dict'])
+		optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+		if 'train_losses' in checkpoint and 'val_losses' in checkpoint:
+			train_losses = checkpoint['train_losses']
+			val_losses = checkpoint['val_losses']
+		if 'recall_history' in checkpoint:
+			recall_history = checkpoint['recall_history']
+		start_epoch = checkpoint.get('epoch', 1)
+		epochs_run = checkpoint.get('epochs_run', start_epoch)
+		print(f"Resuming from epoch {start_epoch}")
+	else:
+		print("Starting training from scratch.")
 
-	for epoch in range(epochs):
+	for epoch in range(start_epoch, start_epoch + epochs):
 		model.train()
 		running_loss = 0.0
 		train_iter = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs} [Train]", leave=False)
@@ -117,26 +134,33 @@ def train_clip(
 			recall_history[f'Recall@{k}_t2i'].append(r_t2i)
 		scheduler.step(avg_val_loss)
 
-		print(f"Epoch {epoch+1}/{epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} | LR: {optimizer.param_groups[0]['lr']:.6f}")
+		print(f"Epoch {epoch+1} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} | LR: {optimizer.param_groups[0]['lr']:.6f}")
 		print("  Recall@1_i2t: {:.4f}  Recall@1_t2i: {:.4f}  Recall@5_i2t: {:.4f}  Recall@5_t2i: {:.4f}  Recall@10_i2t: {:.4f}  Recall@10_t2i: {:.4f}".format(
 			recall_history['Recall@1_i2t'][-1], recall_history['Recall@1_t2i'][-1],
 			recall_history['Recall@5_i2t'][-1], recall_history['Recall@5_t2i'][-1],
 			recall_history['Recall@10_i2t'][-1], recall_history['Recall@10_t2i'][-1]))
 
 		# Save only the best checkpoint (lowest val loss)
-		checkpoint_path = "clip_best_checkpoint.pth"
-		if epoch == 0 or avg_val_loss < min(val_losses[:-1]):
+		if epoch == start_epoch or avg_val_loss < min(val_losses[:-1]):
 			# Remove previous checkpoint if exists
 			if os.path.exists(checkpoint_path):
 				os.remove(checkpoint_path)
 			torch.save({
 				'epoch': epoch + 1,
+				'epochs_run': epochs_run + (epoch - start_epoch + 1),
 				'model_state_dict': model.state_dict(),
 				'optimizer_state_dict': optimizer.state_dict(),
-				'train_loss': avg_train_loss,
-				'val_loss': avg_val_loss
+				'train_losses': train_losses,
+				'val_losses': val_losses,
+				'recall_history': recall_history
 			}, checkpoint_path)
 			print(f"Best checkpoint saved: {checkpoint_path}")
+
+		# Save plots every 3 epochs (and at last epoch)
+		if ((epoch + 1) % 3 == 0) or (epoch == start_epoch + epochs - 1):
+			plot_losses(train_losses, val_losses)
+			plot_recalls(recall_history)
+			print(f"Saved loss and recall plots at epoch {epoch+1}")
 	total_time = time.time() - start_time
 	return train_losses, val_losses, recall_history, total_time, device, model
 
