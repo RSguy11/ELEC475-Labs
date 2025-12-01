@@ -52,6 +52,8 @@ class CLIPTextEncoder(nn.Module):
     
     def forward(self, texts):
         inputs = self.tokenizer(texts, padding=True, truncation=True, max_length=77, return_tensors="pt")
+        device = next(self.text_encoder.parameters()).device
+        inputs = {k: v.to(device) for k, v in inputs.items()}
         with torch.no_grad():
             outputs = self.text_encoder(**inputs)
             return outputs.last_hidden_state[:, 0, :]

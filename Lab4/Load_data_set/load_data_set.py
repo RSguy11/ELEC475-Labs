@@ -17,7 +17,7 @@ CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
 CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
 
 class SimpleCOCODataset(Dataset):
-    def __init__(self, data_root: str = "../coco2014", split: str = 'train', max_samples: Optional[int] = None):
+    def __init__(self, data_root: str = "coco2014", split: str = 'train', max_samples: Optional[int] = None):
         self.data_root = data_root
         self.split = split
         
@@ -88,23 +88,21 @@ class SimpleCOCODataset(Dataset):
     
     def __getitem__(self, idx):
         pair = self.data_pairs[idx]
-        
         # Load image
         image = Image.open(pair['image_path']).convert('RGB')
         image_tensor = self.transform(image)
-        
-        # Encode text
+        # Encode text (not used in training, but kept for compatibility)
         with torch.no_grad():
             inputs = self.tokenizer(pair['text'], return_tensors="pt", padding=True, truncation=True)
             text_embedding = self.text_encoder(**inputs).last_hidden_state[:, 0, :].squeeze()
-        
         return {
             'image': image_tensor,
             'text_embedding': text_embedding,
-            'text': pair['text']
+            'text': pair['text'],
+            'image_path': pair['image_path']
         }
 
-def create_dataloaders(data_root: str = "../coco2014", batch_size: int = 16, max_samples: int = 100):
+def create_dataloaders(data_root: str = "coco2014", batch_size: int = 16, max_samples: int = 100):
     """Create simple train and val dataloaders"""
     
     train_dataset = SimpleCOCODataset(data_root, 'train', max_samples)

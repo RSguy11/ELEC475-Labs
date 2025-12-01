@@ -5,9 +5,16 @@ import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
+from tqdm import tqdm
 import os
+import sys
+
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from CLIP_model_design.clip_pipe import CLIPModel
-from Lab4.Load_data_set.load_data_set import create_dataloaders
+from Load_data_set.load_data_set import create_dataloaders
+
 
 def compute_cosine_similarity_matrix(image_embeds, text_embeds):
 	# image_embeds: [N, D], text_embeds: [N, D]
@@ -33,7 +40,7 @@ def evaluate_clip(model, dataloader, device):
 	all_image_embeds = []
 	all_text_embeds = []
 	with torch.no_grad():
-		for batch in dataloader:
+		for batch in tqdm(dataloader, desc="Evaluating", leave=False):
 			images = batch['image'].to(device)
 			texts = batch['text']
 			image_embeds = model.encode_image(images).cpu()
@@ -59,7 +66,8 @@ def visualize_text_to_image(model, dataloader, device, query, top_k=5):
 		for batch in dataloader:
 			images = batch['image'].to(device)
 			image_embeds = model.encode_image(images).cpu()
-			image_paths = batch.get('image_path', [None]*images.size(0))
+			# batch['image_path'] is a list of paths
+			image_paths = batch['image_path'] if 'image_path' in batch else [None]*images.size(0)
 			images_list.extend(image_paths)
 			image_embeds_list.append(image_embeds)
 	all_image_embeds = torch.cat(image_embeds_list, dim=0)
@@ -76,7 +84,7 @@ def visualize_text_to_image(model, dataloader, device, query, top_k=5):
 		try:
 			img = Image.open(path)
 			plt.imshow(img)
-			plt.title(f"Rank {rank}")
+			plt.title(f"Text-to-Image Retrieval\nQuery: '{query}' | Top-{top_k} | Rank {rank}")
 			plt.axis('off')
 			out_path = os.path.join(output_dir, f"text2img_query_{query.replace(' ','_')}_rank{rank}.png")
 			plt.savefig(out_path)
@@ -84,6 +92,85 @@ def visualize_text_to_image(model, dataloader, device, query, top_k=5):
 			print(f"Saved: {out_path}")
 		except Exception as e:
 			print(f"Could not display/save image: {e}")
+
+def visualize_best_and_worst(model, dataloader, device, query, top_k=5):
+	"""Visualize top-k best and worst retrievals for a category query."""
+	model.eval()
+	images_list = []
+	image_embeds_list = []
+	with torch.no_grad():
+		for batch in dataloader:
+			images = batch['image'].to(device)
+			image_embeds = model.encode_image(images).cpu()
+			image_paths = batch['image_path'] if 'image_path' in batch else [None]*images.size(0)
+			images_list.extend(image_paths)
+			image_embeds_list.append(image_embeds)
+	all_image_embeds = torch.cat(image_embeds_list, dim=0)
+	text_embed = model.encode_text([query]).cpu()
+	sims = F.normalize(all_image_embeds, p=2, dim=1) @ F.normalize(text_embed, p=2, dim=1).T
+	sims = sims.squeeze()
+	topk_idx = sims.argsort(descending=True)[:top_k]
+	bottomk_idx = sims.argsort(descending=False)[:top_k]
+	output_dir = "standard_image"
+	os.makedirs(output_dir, exist_ok=True)
+	# Best
+	for rank, idx in enumerate(topk_idx, 1):
+		path = images_list[idx] if images_list[idx] else f"Index {idx}"
+		try:
+			img = Image.open(path)
+			plt.imshow(img)
+			plt.title(f"Best Retrieval for Query: '{query}'\nTop-{top_k} | Rank {rank}")
+			plt.axis('off')
+			out_path = os.path.join(output_dir, f"best_{query.replace(' ','_')}_rank{rank}.png")
+			plt.savefig(out_path)
+			plt.close()
+		except Exception as e:
+			print(f"Could not display/save image: {e}")
+	# Worst
+	for rank, idx in enumerate(bottomk_idx, 1):
+		path = images_list[idx] if images_list[idx] else f"Index {idx}"
+		try:
+			img = Image.open(path)
+			plt.imshow(img)
+			plt.title(f"Worst Retrieval for Query: '{query}'\nLowest-{top_k} | Rank {rank}")
+			plt.axis('off')
+			out_path = os.path.join(output_dir, f"worst_{query.replace(' ','_')}_rank{rank}.png")
+			plt.savefig(out_path)
+			plt.close()
+		except Exception as e:
+			print(f"Could not display/save image: {e}")
+
+def visualize_image_best_guesses(model, dataloader, device, image_idx=0, class_list=None, top_k=5):
+	"""Visualize the model's top-k best guesses for a given image over a class list."""
+	model.eval()
+	# Get all images and paths
+	images = []
+	image_paths = []
+	for batch in dataloader:
+		for img, path in zip(batch['image'], batch['image_path']):
+			images.append(img)
+			image_paths.append(path)
+	if image_idx >= len(images):
+		print(f"Image index {image_idx} out of range.")
+		return
+	img_tensor = images[image_idx].unsqueeze(0).to(device)
+	img_path = image_paths[image_idx]
+	with torch.no_grad():
+		text_embeds = model.encode_text(class_list).cpu()
+		image_embed = model.encode_image(img_tensor).cpu()
+		sims = F.normalize(image_embed, p=2, dim=1) @ F.normalize(text_embeds, p=2, dim=1).T
+		sims = sims.squeeze()
+		topk_idx = sims.argsort(descending=True)[:top_k]
+	output_dir = "standard_image"
+	os.makedirs(output_dir, exist_ok=True)
+	img = Image.open(img_path)
+	for rank, idx in enumerate(topk_idx, 1):
+		plt.imshow(img)
+		plt.title(f"Image-to-Text Classification\nImage: {os.path.basename(img_path)} | Guess {rank}: {class_list[idx]}")
+		plt.axis('off')
+		out_path = os.path.join(output_dir, f"img_best_guess_{os.path.basename(img_path)}_guess{rank}_{class_list[idx].replace(' ','_')}.png")
+		plt.savefig(out_path)
+		plt.close()
 
 def classify_image(model, image_path, device, class_list):
 	model.eval()
@@ -114,12 +201,16 @@ def classify_image(model, image_path, device, class_list):
 	print(f"Saved: {out_path}")
 
 if __name__ == "__main__":
+	import argparse
+	parser = argparse.ArgumentParser(description="CLIP Evaluation Script")
+	parser.add_argument('--max_samples', type=int, default=100, help='Number of samples to use from the dataset')
+	args = parser.parse_args()
 	device = "cuda" if torch.cuda.is_available() else "cpu"
 	# Load model and data
 	model = CLIPModel().to(device)
 	# Optionally, load a checkpoint here
 	# model.load_state_dict(torch.load('clip_checkpoint_epoch5.pth')['model_state_dict'])
-	_, val_loader = create_dataloaders(batch_size=16, max_samples=100)
+	_, val_loader = create_dataloaders(batch_size=16, max_samples=args.max_samples)
 
 	# Evaluation
 	sim_matrix, recalls, image_embeds, text_embeds = evaluate_clip(model, val_loader, device)
@@ -127,11 +218,12 @@ if __name__ == "__main__":
 	for k, v in recalls.items():
 		print(f"  {k}: {v:.4f}")
 
-	# Visualize text-to-image retrieval
-	visualize_text_to_image(model, val_loader, device, query='sport', top_k=5)
 
-	# Visualize image classification
-	# Provide a real image path and class list for your dataset
-	# classify_image(model, 'path/to/image.jpg', device, ['a person', 'an animal', 'a landscape'])
+	# Visualize best and worst for a category
+	visualize_best_and_worst(model, val_loader, device, query='sport', top_k=5)
+
+	# Visualize best guesses for a single image
+	class_list = ['a person', 'an animal', 'a landscape', 'a car', 'a building']
+	visualize_image_best_guesses(model, val_loader, device, image_idx=0, class_list=class_list, top_k=5)
 
 	print("Discuss: Analyze recall metrics and training/validation loss curves to discuss performance trends and training dynamics.")
