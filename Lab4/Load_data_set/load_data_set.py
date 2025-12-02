@@ -12,9 +12,9 @@ import json
 import os
 from typing import Optional
 
-# ImageNet constants for ResNet50
-IMAGENET_MEAN = [0.485, 0.456, 0.406]
-IMAGENET_STD = [0.229, 0.224, 0.225]
+# CLIP constants - use these for CLIP vision model
+CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
+CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
 
 class SimpleCOCODataset(Dataset):
     def __init__(self, data_root: str = "coco2014", split: str = 'train', max_samples: Optional[int] = None):
@@ -26,11 +26,11 @@ class SimpleCOCODataset(Dataset):
         self.images_dir = os.path.join(data_root, "images", f"{split}2014")
         self.instances_file = os.path.join(data_root, "annotations", f"instances_{split}2014.json")
         
-        # Setup transforms - use ImageNet normalization for ResNet50
+        # Setup transforms - use CLIP normalization for CLIP vision model
         self.transform = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
-            transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
+            transforms.Normalize(mean=CLIP_MEAN, std=CLIP_STD)
         ])
         
         # Load CLIP text encoder for on-the-fly encoding
