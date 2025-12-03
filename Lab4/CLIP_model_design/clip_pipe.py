@@ -2,27 +2,37 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
-from transformers import CLIPTextModel, CLIPTokenizer
+from transformers import CLIPTextModel, CLIPTokenizer, CLIPVisionModel
 
 class CLIPImageEncoder(nn.Module):
     def __init__(self):
         super().__init__()
         
-        self.resnet50 = models.resnet50(weights='DEFAULT')
-        self.resnet50 = nn.Sequential(*list(self.resnet50.children())[:-1])  # Remove classifier
+        # Use CLIP's own vision encoder for better alignment
+        self.vision_model = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32")
         
+        # Unfreeze last few layers for fine-tuning
+        for param in self.vision_model.parameters():
+            param.requires_grad = False  # Freeze everything first
+        
+        # Unfreeze last transformer layers
+        for layer in self.vision_model.vision_model.encoder.layers[-2:]:
+            for param in layer.parameters():
+                param.requires_grad = True
+        
+        # Simple projection to match dimensions
         self.projection = nn.Sequential(
-            nn.Linear(2048, 512),  # Direct projection
+            nn.Linear(768, 512),  # CLIP vision output is 768
             nn.LayerNorm(512),
             nn.GELU()
         )
-        # Better initialization for projection layer
+        # Better initialization 
         nn.init.xavier_uniform_(self.projection[0].weight)
         nn.init.zeros_(self.projection[0].bias)
     
     def forward(self, x):
-        features = self.resnet50(x)
-        features = features.view(features.size(0), -1)  # Flatten
+        vision_outputs = self.vision_model(x)
+        features = vision_outputs.pooler_output  # [batch_size, 768]
         return self.projection(features)
 
 

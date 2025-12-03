@@ -62,9 +62,10 @@ def train_clip(
 	ema_model.load_state_dict(model.state_dict())
 	ema_decay = 0.999
 	optimizer = optim.AdamW([
-		{"params": model.image_encoder.parameters(), "lr": lr},  # Normal LR for stability
-		{"params": [model.logit_scale], "lr": lr * 5},  # Moderate boost for temperature
-	], weight_decay=0.01)  # Higher weight decay for better generalization
+		{"params": model.image_encoder.vision_model.parameters(), "lr": lr * 0.1},  # Lower LR for pretrained CLIP vision
+		{"params": model.image_encoder.projection.parameters(), "lr": lr},          # Normal LR for projection  
+		{"params": [model.logit_scale], "lr": lr * 5},                              # Higher LR for temperature
+	], weight_decay=0.01)  # Reduced weight decay
 	# Simple step scheduler - more predictable
 	scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.5)
 	scaler = GradScaler('cuda')  # For mixed precision
@@ -246,7 +247,7 @@ if __name__ == "__main__":
 	# Set the correct path to coco2014 (relative to this script)
 	coco2014_path = "../coco2014"  # Go up one directory from Training_ folder
 	train_losses, val_losses, recall_history, total_time, device, model = train_clip(
-		epochs=args.epochs, batch_size=args.batch_size, lr=1e-4, max_samples=args.max_samples, data_root=coco2014_path
+		epochs=args.epochs, batch_size=args.batch_size, lr=3e-4, max_samples=args.max_samples, data_root=coco2014_path
 	)
 	plot_losses(train_losses, val_losses)
 	plot_recalls(recall_history)
